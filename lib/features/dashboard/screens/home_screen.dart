@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -665,9 +666,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 0.95,
+              mainAxisSpacing: kIsWeb ? 10 : 12,
+              crossAxisSpacing: kIsWeb ? 10 : 12,
+              // Doubling web aspect ratio halves card height while keeping width stable.
+              childAspectRatio: kIsWeb ? 2.9 : 0.95,
             ),
             itemCount: actions.length,
             itemBuilder: (context, index) {
@@ -694,7 +696,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _buildMarketStrip(AsyncValue<List<CropPrice>> marketAsync) {
     return marketAsync.when(
       data: (prices) => SizedBox(
-        height: 130,
+        height: kIsWeb ? 210 : 130,
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -955,10 +957,26 @@ class _MarketChip extends StatelessWidget {
   final CropPrice price;
   const _MarketChip({required this.price});
 
+  String _cleanMarketText(String text) {
+    final markdownStripped = text.replaceAllMapped(
+      RegExp(r'\[([^\]]+)\]\(([^)]+)\)'),
+      (m) => m.group(1) ?? '',
+    );
+
+    final urlStripped = markdownStripped
+        .replaceAll(RegExp(r'https?://\S+'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    return urlStripped.isEmpty ? 'Live Market' : urlStripped;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isUp = price.trend == PriceTrend.up;
     final isDown = price.trend == PriceTrend.down;
+    final cropText = _cleanMarketText(price.crop);
+    final mandiText = _cleanMarketText(price.mandi).replaceAll('/', ' / ');
     final trendColor = isUp
         ? Colors.green.shade700
         : isDown
@@ -968,9 +986,9 @@ class _MarketChip extends StatelessWidget {
         isUp ? Icons.arrow_upward_rounded : isDown ? Icons.arrow_downward_rounded : Icons.remove_rounded;
 
     return Container(
-      width: 130,
+      width: kIsWeb ? 190 : 130,
       margin: const EdgeInsets.only(right: 10),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(kIsWeb ? 14 : 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -983,19 +1001,31 @@ class _MarketChip extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           Text(price.emoji, style: const TextStyle(fontSize: 22)),
+          const SizedBox(height: 6),
+          Text(
+            cropText,
+            maxLines: kIsWeb ? 2 : 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(price.crop,
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  color: AppColors.textPrimary)),
-          Text(price.mandi.split(' ').first,
-              style: const TextStyle(
-                  fontSize: 10, color: AppColors.textSecondary)),
-          const SizedBox(height: 4),
+          Text(
+            mandiText,
+            maxLines: kIsWeb ? 2 : 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const Spacer(),
           Row(
             children: [
               Text(price.formattedPrice,

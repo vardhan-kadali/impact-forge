@@ -41,9 +41,30 @@ class AuthService {
   }
 
   Future<UserCredential?> signInWithGoogle() async {
-    if (!_firebaseInitialized || _googleSignIn == null) {
-      throw Exception('Google sign-in is not available because Firebase or web sign-in is not configured. Use the Skip button or configure Firebase/Google Sign-In before using this feature.');
+    if (!_firebaseInitialized) {
+      throw Exception(
+        'Firebase is not initialized. Configure Firebase first, then try again.',
+      );
     }
+
+    if (kIsWeb) {
+      try {
+        final provider = GoogleAuthProvider()
+          ..addScope('email')
+          ..setCustomParameters({'prompt': 'select_account'});
+        return await _auth.signInWithPopup(provider);
+      } catch (e) {
+        debugPrint('Error during Google Sign-In on web: $e');
+        rethrow;
+      }
+    }
+
+    if (_googleSignIn == null) {
+      throw Exception(
+        'Google Sign-In is not available on this platform/configuration.',
+      );
+    }
+
     try {
       // Trigger the authentication flow
       final googleUser = await _googleSignIn!.signIn();

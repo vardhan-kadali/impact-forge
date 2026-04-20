@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 class AppTheme {
@@ -19,7 +18,7 @@ class AppTheme {
       scaffoldBackgroundColor: AppColors.background,
       
       // ─── Card Theme ────────────────────────────────────────────────
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.cardBg,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -37,7 +36,7 @@ class AppTheme {
           minimumSize: const Size(double.infinity, 56),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           shadowColor: AppColors.primary.withValues(alpha: 0.3),
-          textStyle: GoogleFonts.notoSans(
+          textStyle: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.5,
@@ -51,7 +50,7 @@ class AppTheme {
           side: const BorderSide(color: AppColors.primary, width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          textStyle: GoogleFonts.notoSans(
+          textStyle: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -60,33 +59,33 @@ class AppTheme {
 
       // ─── Text Theme ───────────────────────────────────────────────
       textTheme: TextTheme(
-        headlineLarge: GoogleFonts.notoSans(
+        headlineLarge: const TextStyle(
           fontSize: 32,
           fontWeight: FontWeight.w800,
           color: AppColors.textPrimary,
           letterSpacing: -0.5,
         ),
-        headlineMedium: GoogleFonts.notoSans(
+        headlineMedium: const TextStyle(
           fontSize: 24,
           fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
         ),
-        titleLarge: GoogleFonts.notoSans(
+        titleLarge: const TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.bold,
           color: AppColors.textPrimary,
         ),
-        bodyLarge: GoogleFonts.notoSans(
+        bodyLarge: const TextStyle(
           fontSize: 16,
           color: AppColors.textPrimary,
           height: 1.5,
         ),
-        bodyMedium: GoogleFonts.notoSans(
+        bodyMedium: const TextStyle(
           fontSize: 14,
           color: AppColors.textSecondary,
           height: 1.4,
         ),
-        labelSmall: GoogleFonts.notoSans(
+        labelSmall: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w500,
           color: AppColors.textMuted,
@@ -100,7 +99,7 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         foregroundColor: AppColors.textPrimary,
-        titleTextStyle: GoogleFonts.notoSans(
+        titleTextStyle: const TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.w800,
           color: AppColors.textPrimary,
@@ -125,7 +124,7 @@ class AppTheme {
           borderSide: const BorderSide(color: AppColors.primary, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        hintStyle: GoogleFonts.notoSans(color: AppColors.textMuted),
+        hintStyle: const TextStyle(color: AppColors.textMuted),
       ),
     );
   }
@@ -142,7 +141,7 @@ class AppTheme {
       ),
       // Basic dark theme adaptation
       scaffoldBackgroundColor: const Color(0xFF0C100B),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: const Color(0xFF161C16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),

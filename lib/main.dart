@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'core/theme/app_theme.dart';
+import 'core/firebase/firebase_bootstrap.dart';
 import 'app.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase Initialization
-  // Note: For Android/iOS, you must add your google-services.json/GoogleService-Info.plist
-  // and potentially run `flutterfire configure` to generate firebase_options.dart.
+  // Firebase initialization:
+  // - Web can use --dart-define keys (see FirebaseBootstrap)
+  // - Android/iOS can use platform config files from Firebase console
   try {
-    await Firebase.initializeApp();
+    await FirebaseBootstrap.initialize();
   } catch (e) {
     debugPrint('Firebase initialization failed: $e');
   }

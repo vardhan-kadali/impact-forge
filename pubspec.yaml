@@ -30,7 +30,6 @@ dependencies:
 
   # UI & Media
   flutter_staggered_animations: any
-  google_fonts: any
   flutter_tts: any
   speech_to_text: any
   image_picker: any
