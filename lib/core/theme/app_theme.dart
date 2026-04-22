@@ -58,34 +58,34 @@ class AppTheme {
       ),
 
       // ─── Text Theme ───────────────────────────────────────────────
-      textTheme: TextTheme(
-        headlineLarge: const TextStyle(
+      textTheme: const TextTheme(
+        headlineLarge: TextStyle(
           fontSize: 32,
           fontWeight: FontWeight.w800,
           color: AppColors.textPrimary,
           letterSpacing: -0.5,
         ),
-        headlineMedium: const TextStyle(
+        headlineMedium: TextStyle(
           fontSize: 24,
           fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
         ),
-        titleLarge: const TextStyle(
+        titleLarge: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.bold,
           color: AppColors.textPrimary,
         ),
-        bodyLarge: const TextStyle(
+        bodyLarge: TextStyle(
           fontSize: 16,
           color: AppColors.textPrimary,
           height: 1.5,
         ),
-        bodyMedium: const TextStyle(
+        bodyMedium: TextStyle(
           fontSize: 14,
           color: AppColors.textSecondary,
           height: 1.4,
         ),
-        labelSmall: const TextStyle(
+        labelSmall: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w500,
           color: AppColors.textMuted,
@@ -93,18 +93,18 @@ class AppTheme {
       ),
 
       // ─── AppBar Theme ──────────────────────────────────────────────
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         centerTitle: false,
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         foregroundColor: AppColors.textPrimary,
-        titleTextStyle: const TextStyle(
+        titleTextStyle: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.w800,
           color: AppColors.textPrimary,
         ),
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        iconTheme: IconThemeData(color: AppColors.textPrimary),
       ),
 
       // ─── Input Decoration Theme ───────────────────────────────────

@@ -10,7 +10,12 @@ class FirebaseBootstrap {
     }
 
     final webOptions = _webOptionsFromDartDefine();
-    if (kIsWeb && webOptions != null) {
+    if (kIsWeb) {
+      if (webOptions == null) {
+        throw StateError(
+          'Missing Firebase web configuration. Pass FIREBASE_WEB_* dart-defines for web runs.',
+        );
+      }
       await Firebase.initializeApp(options: webOptions);
       return;
     }
@@ -27,24 +32,28 @@ class FirebaseBootstrap {
     const storageBucket = String.fromEnvironment('FIREBASE_WEB_STORAGE_BUCKET');
     const measurementId = String.fromEnvironment('FIREBASE_WEB_MEASUREMENT_ID');
 
-    final resolvedApiKey = apiKey.isEmpty ? 'AIzaSyDMnDA_lUVXl8oqmmjTZAyNzNYSGKNmc8s' : apiKey;
-    final resolvedAppId = appId.isEmpty ? '1:937705200109:web:8265f895c9ec2f7a46efe4' : appId;
-    final resolvedMessagingSenderId =
-        messagingSenderId.isEmpty ? '937705200109' : messagingSenderId;
-    final resolvedProjectId = projectId.isEmpty ? 'hack-a10bb' : projectId;
-    final resolvedAuthDomain = authDomain.isEmpty ? 'hack-a10bb.firebaseapp.com' : authDomain;
-    final resolvedStorageBucket =
-        storageBucket.isEmpty ? 'hack-a10bb.firebasestorage.app' : storageBucket;
-    final resolvedMeasurementId = measurementId.isEmpty ? 'G-HWLRE3ZHDV' : measurementId;
+    final required = <String, String>{
+      'FIREBASE_WEB_API_KEY': apiKey,
+      'FIREBASE_WEB_APP_ID': appId,
+      'FIREBASE_WEB_MESSAGING_SENDER_ID': messagingSenderId,
+      'FIREBASE_WEB_PROJECT_ID': projectId,
+      'FIREBASE_WEB_AUTH_DOMAIN': authDomain,
+      'FIREBASE_WEB_STORAGE_BUCKET': storageBucket,
+    };
+
+    final hasMissing = required.values.any((value) => value.isEmpty);
+    if (hasMissing) {
+      return null;
+    }
 
     return FirebaseOptions(
-      apiKey: resolvedApiKey,
-      appId: resolvedAppId,
-      messagingSenderId: resolvedMessagingSenderId,
-      projectId: resolvedProjectId,
-      authDomain: resolvedAuthDomain,
-      storageBucket: resolvedStorageBucket,
-      measurementId: resolvedMeasurementId,
+      apiKey: apiKey,
+      appId: appId,
+      messagingSenderId: messagingSenderId,
+      projectId: projectId,
+      authDomain: authDomain,
+      storageBucket: storageBucket,
+      measurementId: measurementId.isEmpty ? null : measurementId,
     );
   }
 }

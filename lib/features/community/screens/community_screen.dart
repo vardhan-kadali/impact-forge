@@ -1,135 +1,83 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import '../../../services/auth_service.dart';
 import '../../../core/theme/app_colors.dart';
 
 // --------------- Providers ---------------
 
-final communityPostsProvider =
-    StateNotifierProvider<CommunityNotifier, List<CommunityPost>>(
-        (ref) => CommunityNotifier());
+final communityPostsStreamProvider = StreamProvider<List<CommunityPost>>((ref) {
+  if (Firebase.apps.isEmpty) {
+    return Stream.error(
+      'Firebase is not initialized. Configure Firebase and restart the app.',
+    );
+  }
+
+  final query = FirebaseFirestore.instance
+      .collection('community_tips')
+      .orderBy('createdAt', descending: true);
+
+  return query.snapshots().map(
+        (snapshot) => snapshot.docs
+            .map((doc) => CommunityPost.fromFirestore(doc))
+            .toList(),
+      );
+});
 
 class CommunityPost {
   final String id;
+  final String authorUid;
   final String userName;
   final String userInitial;
   final Color avatarColor;
   final String message;
-  final String messageInTelugu;
-  final String time;
   final String tag;
-  int likes;
-  bool likedByMe;
+  final DateTime createdAt;
 
   CommunityPost({
     required this.id,
+    required this.authorUid,
     required this.userName,
     required this.userInitial,
     required this.avatarColor,
     required this.message,
-    required this.messageInTelugu,
-    required this.time,
     required this.tag,
-    this.likes = 0,
-    this.likedByMe = false,
+    required this.createdAt,
   });
 
-  CommunityPost copyWith({int? likes, bool? likedByMe}) => CommunityPost(
-        id: id,
-        userName: userName,
-        userInitial: userInitial,
-        avatarColor: avatarColor,
-        message: message,
-        messageInTelugu: messageInTelugu,
-        time: time,
-        tag: tag,
-        likes: likes ?? this.likes,
-        likedByMe: likedByMe ?? this.likedByMe,
-      );
-}
+  factory CommunityPost.fromFirestore(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    final createdAt = data['createdAt'];
+    final createdAtDate = createdAt is Timestamp
+        ? createdAt.toDate()
+        : DateTime.now();
 
-class CommunityNotifier extends StateNotifier<List<CommunityPost>> {
-  CommunityNotifier() : super(_initialPosts());
-
-  void toggleLike(String postId) {
-    state = state.map((post) {
-      if (post.id != postId) return post;
-      return post.copyWith(
-        likes: post.likedByMe ? post.likes - 1 : post.likes + 1,
-        likedByMe: !post.likedByMe,
-      );
-    }).toList();
-  }
-
-  void addPost(String message) {
-    final newPost = CommunityPost(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      userName: 'You',
-      userInitial: 'Y',
-      avatarColor: AppColors.primary,
-      message: message,
-      messageInTelugu: message,
-      time: 'Just now',
-      tag: 'General',
-      likes: 0,
+    return CommunityPost(
+      id: doc.id,
+      authorUid: (data['authorUid'] as String?) ?? '',
+      userName: (data['userName'] as String?) ?? 'Farmer',
+      userInitial: (data['userInitial'] as String?) ?? 'F',
+      avatarColor: Color((data['avatarColor'] as int?) ?? AppColors.primary.value),
+      message: (data['message'] as String?) ?? '',
+      tag: (data['tag'] as String?) ?? '🌾 Crop Tips',
+      createdAt: createdAtDate,
     );
-    state = [newPost, ...state];
   }
 
-  static List<CommunityPost> _initialPosts() => [
-        CommunityPost(
-          id: '1',
-          userName: 'Anji Reddy',
-          userInitial: 'A',
-          avatarColor: const Color(0xFF1565C0),
-          message:
-              'Kurnool Sona Masuri variety is doing excellent with drip irrigation this season! Very low water consumption.',
-          messageInTelugu:
-              'Kurnool Sona Masuri variety is doing excellent with drip irrigation this season! Very low water consumption.',
-          time: '2 hours ago',
-          tag: '🌾 Crop Tips',
-          likes: 24,
-        ),
-        CommunityPost(
-          id: '2',
-          userName: 'Suresh Garu',
-          userInitial: 'S',
-          avatarColor: const Color(0xFF6A1B9A),
-          message:
-              'Natural neem oil spray (5ml/litre) worked perfectly for tomato whitefly. No chemicals needed!',
-          messageInTelugu:
-              'Natural neem oil spray (5ml/litre) worked perfectly for tomato whitefly. No chemicals needed!',
-          time: '5 hours ago',
-          tag: '🌿 Natural Remedy',
-          likes: 41,
-        ),
-        CommunityPost(
-          id: '3',
-          userName: 'Ramesh P',
-          userInitial: 'R',
-          avatarColor: const Color(0xFFE65100),
-          message:
-              'Does anyone know the best selling price for dry chilli in Adoni mandi this week?',
-          messageInTelugu:
-              'Does anyone know the best selling price for dry chilli in Adoni mandi this week?',
-          time: 'Yesterday',
-          tag: '💰 Market Query',
-          likes: 8,
-        ),
-        CommunityPost(
-          id: '4',
-          userName: 'Lakshmi Devi',
-          userInitial: 'L',
-          avatarColor: const Color(0xFF00695C),
-          message:
-              'I switched to mulching for my Onion crop – saved almost 40% water! Highly recommend for Kurnool region.',
-          messageInTelugu:
-              'I switched to mulching for my Onion crop – saved almost 40% water! Highly recommend for Kurnool region.',
-          time: '2 days ago',
-          tag: '💧 Water Saving',
-          likes: 57,
-        ),
-      ];
+  String relativeTime() {
+    final now = DateTime.now();
+    final diff = now.difference(createdAt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${createdAt.day}/${createdAt.month}/${createdAt.year}';
+  }
 }
 
 // --------------- Screen ---------------
@@ -143,6 +91,7 @@ class CommunityScreen extends ConsumerStatefulWidget {
 
 class _CommunityScreenState extends ConsumerState<CommunityScreen> {
   String _selectedTag = 'All';
+  String? _cachedGuestId;
 
   final List<String> _tags = [
     'All',
@@ -154,10 +103,9 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final posts = ref.watch(communityPostsProvider);
-    final filtered = _selectedTag == 'All'
-        ? posts
-        : posts.where((p) => p.tag == _selectedTag).toList();
+    final postsAsync = ref.watch(communityPostsStreamProvider);
+    final currentUserId = ref.watch(authStateProvider).value?.uid;
+    final viewerId = currentUserId ?? _guestId();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -228,30 +176,85 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
           ),
 
           // ─── Post Count ──────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-              child: Text(
-                '${filtered.length} posts',
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary),
-              ),
-            ),
+          postsAsync.when(
+            data: (posts) {
+              final filtered = _selectedTag == 'All'
+                  ? posts
+                  : posts.where((p) => p.tag == _selectedTag).toList();
+
+              return SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                  child: Text(
+                    '${filtered.length} tips',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              );
+            },
+            loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
+            error: (_, __) => const SliverToBoxAdapter(child: SizedBox.shrink()),
           ),
 
           // ─── Posts ───────────────────────────────────────────────────
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) => _PostCard(
-                post: filtered[index],
-                onLike: () {
-                  HapticFeedback.lightImpact();
-                  ref
-                      .read(communityPostsProvider.notifier)
-                      .toggleLike(filtered[index].id);
-                },
+          postsAsync.when(
+            data: (posts) {
+              final filtered = _selectedTag == 'All'
+                  ? posts
+                  : posts.where((p) => p.tag == _selectedTag).toList();
+
+              if (filtered.isEmpty) {
+                return const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+                    child: Text(
+                      'No tips yet. Be the first to post one.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              return SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final post = filtered[index];
+                    final isMine = post.authorUid.isNotEmpty &&
+                      post.authorUid == viewerId;
+                      return _PostBubble(
+                      post: post,
+                      isMine: isMine,
+                      onDelete: isMine
+                        ? () => _confirmDelete(post)
+                          : null,
+                    );
+                  },
+                  childCount: filtered.length,
+                ),
+              );
+            },
+            loading: () => const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    'Unable to load tips right now.\n$error',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  ),
+                ),
               ),
-              childCount: filtered.length,
             ),
           ),
 
@@ -272,76 +275,229 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 
   void _showPostDialog(BuildContext context) {
     final ctrl = TextEditingController();
+    String selectedTag = '🌾 Crop Tips';
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Share Experience',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryDark)),
-            const Text('Share your farming tip',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: ctrl,
-              maxLines: 4,
-              decoration: InputDecoration(
-                hintText: 'Share farming tips... (English)',
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14)),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide:
-                      const BorderSide(color: Color(0xFF7B1FA2), width: 2),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Share Experience',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryDark)),
+              const Text('Share your farming tip',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  hintText: 'Share farming tips... (English)',
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide:
+                        const BorderSide(color: Color(0xFF7B1FA2), width: 2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Cancel'),
-                  ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: selectedTag,
+                decoration: const InputDecoration(
+                  labelText: 'Tip category',
+                  border: OutlineInputBorder(),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF7B1FA2)),
-                    onPressed: () {
-                      if (ctrl.text.trim().isNotEmpty) {
-                        ref
-                            .read(communityPostsProvider.notifier)
-                            .addPost(ctrl.text.trim());
-                        Navigator.pop(ctx);
-                      }
-                    },
-                    child: const Text('Post',
-                        style: TextStyle(color: Colors.white)),
+                items: _tags
+                    .where((tag) => tag != 'All')
+                    .map(
+                      (tag) => DropdownMenuItem<String>(
+                        value: tag,
+                        child: Text(tag),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setModalState(() => selectedTag = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel'),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF7B1FA2)),
+                      onPressed: () async {
+                        if (ctrl.text.trim().isNotEmpty) {
+                          final posted =
+                              await _createPost(ctrl.text.trim(), selectedTag);
+                          if (posted && ctx.mounted) {
+                            Navigator.pop(ctx);
+                          }
+                        }
+                      },
+                      child: const Text('Post',
+                          style: TextStyle(color: Colors.white)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Future<bool> _createPost(String message, String tag) async {
+    if (Firebase.apps.isEmpty) {
+      _showMessage(
+        'Firebase is not configured for this run. Add FIREBASE_WEB_* dart-defines and restart.',
+      );
+      return false;
+    }
+
+    final currentUser = ref.read(authStateProvider).value;
+    final name = currentUser?.displayName?.trim().isNotEmpty == true
+        ? currentUser!.displayName!.trim()
+        : 'Guest Farmer';
+    final initial = name.substring(0, 1).toUpperCase();
+    final authorUid = currentUser?.uid ?? _guestId();
+
+    try {
+      await FirebaseFirestore.instance.collection('community_tips').add({
+        'authorUid': authorUid,
+        'userName': name,
+        'userInitial': initial,
+        'avatarColor': _colorFromSeed(authorUid).value,
+        'message': message,
+        'tag': tag,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    } on FirebaseException catch (e) {
+      if (!mounted) {
+        return false;
+      }
+      final message = e.code == 'permission-denied'
+          ? 'Posting is blocked by Firestore rules. Allow write access for community_tips.'
+          : 'Could not post tip: ${e.message ?? e.code}';
+      _showMessage(message);
+      return false;
+    } catch (_) {
+      _showMessage('Could not post tip right now. Please try again.');
+      return false;
+    }
+  }
+
+  Future<void> _confirmDelete(CommunityPost post) async {
+    if (Firebase.apps.isEmpty) {
+      _showMessage(
+        'Firebase is not configured for this run. Add FIREBASE_WEB_* dart-defines and restart.',
+      );
+      return;
+    }
+
+    final shouldDelete = await showDialog<bool>(
+      context: this.context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete tip?'),
+        content: const Text('This tip will be removed for everyone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete == true) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('community_tips')
+            .doc(post.id)
+            .delete();
+      } on FirebaseException catch (e) {
+        if (!mounted) {
+          return;
+        }
+        final message = e.code == 'permission-denied'
+            ? 'Delete is blocked by Firestore rules for this user.'
+            : 'Could not delete tip: ${e.message ?? e.code}';
+        _showMessage(message);
+      } catch (_) {
+        _showMessage('Could not delete tip right now. Please try again.');
+      }
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.maybeOf(this.context);
+    if (messenger == null) {
+      return;
+    }
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Color _colorFromSeed(String seed) {
+    final palette = <Color>[
+      const Color(0xFF1565C0),
+      const Color(0xFF6A1B9A),
+      const Color(0xFF2E7D32),
+      const Color(0xFFE65100),
+      const Color(0xFF00695C),
+    ];
+    return palette[seed.hashCode.abs() % palette.length];
+  }
+
+  String _guestId() {
+    if (_cachedGuestId != null) {
+      return _cachedGuestId!;
+    }
+
+    final box = Hive.box('settings');
+    final existing = box.get('community_guest_id') as String?;
+    if (existing != null && existing.isNotEmpty) {
+      _cachedGuestId = existing;
+      return existing;
+    }
+
+    final generated = 'guest_${DateTime.now().millisecondsSinceEpoch}';
+    _cachedGuestId = generated;
+    box.put('community_guest_id', generated);
+    return generated;
   }
 }
 
@@ -389,116 +545,124 @@ class _TagChip extends StatelessWidget {
 }
 
 // ─── Post Card ────────────────────────────────────────────────────────────────
-class _PostCard extends StatelessWidget {
+class _PostBubble extends StatelessWidget {
   final CommunityPost post;
-  final VoidCallback onLike;
+  final bool isMine;
+  final VoidCallback? onDelete;
 
-  const _PostCard({required this.post, required this.onLike});
+  const _PostBubble({
+    required this.post,
+    required this.isMine,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+      child: Row(
+        mainAxisAlignment:
+            isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // Header
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: post.avatarColor,
-                child: Text(post.userInitial,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16)),
+          if (!isMine)
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: post.avatarColor,
+              child: Text(
+                post.userInitial,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
+            ),
+          if (!isMine) const SizedBox(width: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 300),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: isMine ? const Color(0xFFD8F7C9) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 7,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(post.userName,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: AppColors.textPrimary)),
-                    Text(post.time,
-                        style: const TextStyle(
-                            fontSize: 11, color: AppColors.textSecondary)),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            isMine ? 'You' : post.userName,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isMine ? AppColors.primaryDark : post.avatarColor,
+                            ),
+                          ),
+                        ),
+                        if (onDelete != null)
+                          GestureDetector(
+                            onTap: onDelete,
+                            child: const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 18,
+                              color: Colors.redAccent,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      post.message,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          post.tag,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          post.relativeTime(),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: post.avatarColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(post.tag,
-                    style: TextStyle(fontSize: 10, color: post.avatarColor)),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 12),
-
-          // Telugu content (hidden for english flow)
-          Text(post.message,
-              style: const TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w500)),
-          const SizedBox(height: 12),
-
-          // Footer
-          Row(
-            children: [
-              GestureDetector(
-                onTap: onLike,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: Row(
-                    key: ValueKey(post.likedByMe),
-                    children: [
-                      Icon(
-                          post.likedByMe
-                              ? Icons.favorite_rounded
-                              : Icons.favorite_border_rounded,
-                          size: 18,
-                          color: post.likedByMe ? Colors.red : Colors.grey),
-                      const SizedBox(width: 4),
-                      Text('${post.likes}',
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: post.likedByMe
-                                  ? Colors.red
-                                  : Colors.grey)),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 20),
-              const Icon(Icons.comment_outlined, size: 18, color: Colors.grey),
-              const SizedBox(width: 4),
-              const Text('Reply',
-                  style: TextStyle(fontSize: 13, color: Colors.grey)),
-              const Spacer(),
-              Icon(Icons.share_outlined, size: 16, color: Colors.grey.shade400),
-            ],
-          ),
+          if (isMine) const SizedBox(width: 8),
+          if (isMine)
+            const Icon(
+              Icons.done_all_rounded,
+              size: 15,
+              color: Color(0xFF4FC3F7),
+            ),
         ],
       ),
     );

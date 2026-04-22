@@ -26,6 +26,7 @@ dependencies:
   # Firebase Auth
   firebase_core: any
   firebase_auth: any
+  cloud_firestore: any
   google_sign_in: any
 
   # UI & Media

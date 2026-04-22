@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,17 +8,29 @@ import 'package:image_picker/image_picker.dart';
 final aiServiceProvider = Provider((ref) => GeminiService());
 
 class GeminiService {
-  static const String _apiKey = 'AIzaSyC8cDbXvFSrLVQYFh4ImO2KOR7hJ34kxyo';
+  static const String _apiKeyFromEnv = String.fromEnvironment('GEMINI_API_KEY');
+  static const String _legacyApiKeyFromEnv =
+      String.fromEnvironment('GOOGLE_API_KEY');
   static const List<String> _modelCandidates = [
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
     'gemini-1.5-flash',
+    'gemini-1.5-flash-8b',
+    'gemini-1.5-pro',
   ];
 
+  late final String _apiKey;
+  late final bool _hasApiKey;
   late final List<GenerativeModel> _models;
   ChatSession? _chat;
 
   GeminiService() {
+    _apiKey = _apiKeyFromEnv.isNotEmpty ? _apiKeyFromEnv : _legacyApiKeyFromEnv;
+    _hasApiKey = _apiKey.isNotEmpty;
+
+    if (!_hasApiKey) {
+      _models = [];
+      return;
+    }
+
     _models = _modelCandidates
         .map(
           (modelName) => GenerativeModel(
@@ -27,7 +40,7 @@ class GeminiService {
               temperature: 0.7,
               topK: 40,
               topP: 0.95,
-              maxOutputTokens: 1024,
+              maxOutputTokens: 768,
             ),
             systemInstruction: Content.system(
               'You are Kisan Saathi AI, a helpful and expert farming advisor for farmers in Andhra Pradesh. '
@@ -40,14 +53,12 @@ class GeminiService {
         )
         .toList();
 
-    if (_apiKey != 'YOUR_GEMINI_API_KEY') {
-      _chat = _models.first.startChat();
-    }
+    _chat = _models.first.startChat();
   }
 
   Future<String> sendMessage(String text, {List<XFile>? images}) async {
-    if (_apiKey == 'YOUR_GEMINI_API_KEY') {
-      return 'AI key not set. Add your Gemini API key in lib/services/ai_service.dart to enable chat.';
+    if (!_hasApiKey) {
+      return _missingKeyMessage();
     }
 
     try {
@@ -55,8 +66,13 @@ class GeminiService {
         return await _sendImageMessage(text, images);
       }
       return await _sendTextMessage(text);
-    } catch (_) {
-      return _offlineAdvice(text, hasImage: images != null && images.isNotEmpty);
+    } catch (error) {
+      _logGeminiError('sendMessage', error);
+      if (_isQuotaExceeded(error)) {
+        return _quotaExceededMessage();
+      }
+      return _offlineAdvice(text,
+          hasImage: images != null && images.isNotEmpty);
     }
   }
 
@@ -64,7 +80,9 @@ class GeminiService {
     Object? lastError;
     final prompt = _preparePrompt(text);
 
-    for (final model in _models) {
+    for (var modelIndex = 0; modelIndex < _models.length; modelIndex++) {
+      final model = _models[modelIndex];
+      final modelName = _modelCandidates[modelIndex];
       for (var attempt = 0; attempt < 3; attempt++) {
         try {
           _chat = model.startChat();
@@ -75,6 +93,7 @@ class GeminiService {
           }
         } catch (error) {
           lastError = error;
+          _logGeminiError('text:$modelName', error);
           if (_isRetryable(error)) {
             await Future.delayed(Duration(seconds: attempt + 1));
             continue;
@@ -86,9 +105,10 @@ class GeminiService {
       }
     }
 
-    if (lastError != null && _isRetryable(lastError)) {
-      return _offlineAdvice(text);
+    if (lastError != null && _isQuotaExceeded(lastError)) {
+      return _quotaExceededMessage();
     }
+
     return _offlineAdvice(text);
   }
 
@@ -101,7 +121,9 @@ class GeminiService {
     }
 
     Object? lastError;
-    for (final model in _models) {
+    for (var modelIndex = 0; modelIndex < _models.length; modelIndex++) {
+      final model = _models[modelIndex];
+      final modelName = _modelCandidates[modelIndex];
       for (var attempt = 0; attempt < 3; attempt++) {
         try {
           final response = await model.generateContent([
@@ -113,6 +135,7 @@ class GeminiService {
           }
         } catch (error) {
           lastError = error;
+          _logGeminiError('image:$modelName', error);
           if (_isRetryable(error)) {
             await Future.delayed(Duration(seconds: attempt + 1));
             continue;
@@ -124,20 +147,32 @@ class GeminiService {
       }
     }
 
-    if (lastError != null) {
-      return _offlineAdvice(text, hasImage: true);
+    if (lastError != null && _isQuotaExceeded(lastError)) {
+      return _quotaExceededMessage();
     }
+
     return _offlineAdvice(text, hasImage: true);
   }
 
   bool _isRetryable(Object error) {
     final message = error.toString().toLowerCase();
-    return message.contains('503') ||
-        message.contains('unavailable') ||
-        message.contains('high demand') ||
-        message.contains('deadline') ||
-        message.contains('timeout') ||
-        message.contains('connection');
+    return !_isQuotaExceeded(error) &&
+        (message.contains('429') ||
+            message.contains('503') ||
+            message.contains('unavailable') ||
+            message.contains('high demand') ||
+            message.contains('deadline') ||
+            message.contains('timeout') ||
+            message.contains('connection'));
+  }
+
+  bool _isQuotaExceeded(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('quota') ||
+        message.contains('resource_exhausted') ||
+        message.contains('rate limit') ||
+        message.contains('limit exceeded') ||
+        message.contains('too many requests');
   }
 
   bool _isModelUnavailable(Object error) {
@@ -161,6 +196,20 @@ class GeminiService {
       }
     }
     return false;
+  }
+
+  void _logGeminiError(String context, Object error) {
+    if (kDebugMode) {
+      debugPrint('GeminiService [$context] error: $error');
+    }
+  }
+
+  String _missingKeyMessage() {
+    return 'Gemini API key missing. Run the app with --dart-define=GEMINI_API_KEY=your_key and try again.';
+  }
+
+  String _quotaExceededMessage() {
+    return 'Gemini free tier limit reached right now. Please retry after some time. For higher usage, add billing on your Google AI project.';
   }
 
   String _offlineAdvice(String text, {bool hasImage = false}) {
@@ -195,7 +244,9 @@ class GeminiService {
       return 'Check the weather card in the app before irrigation. If rain is likely within 24 to 48 hours, avoid overwatering. For dry conditions, use short irrigation intervals, mulching, and early morning watering to reduce moisture loss.';
     }
 
-    if (query.contains('price') || query.contains('mandi') || query.contains('market')) {
+    if (query.contains('price') ||
+        query.contains('mandi') ||
+        query.contains('market')) {
       return 'For mandi prices, compare the latest market screen values with your nearest market before selling. If transport cost is high, wait for a better spread unless your crop quality may decline in storage.';
     }
 
